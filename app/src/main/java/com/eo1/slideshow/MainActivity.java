@@ -20,18 +20,15 @@ public class MainActivity extends Activity {
     private Handler handler;
     private boolean pageLoaded = false;
 
-    // Change this URL to your slideshow
     private static final String SLIDESHOW_URL = "http://93.127.216.80:3000/d/living-room";
-    private static final int RETRY_DELAY = 5000; // 5 seconds
-    private static final int LOAD_TIMEOUT = 30000; // 30 seconds
+    private static final int RETRY_DELAY = 5000;
+    private static final int LOAD_TIMEOUT = 30000;
 
     private Runnable retryRunnable = new Runnable() {
         @Override
         public void run() {
             if (!pageLoaded && webView != null) {
-                webView.loadUrl(SLIDESHOW_URL);
-                // Set another timeout
-                handler.postDelayed(timeoutRunnable, LOAD_TIMEOUT);
+                loadPage();
             }
         }
     };
@@ -40,7 +37,6 @@ public class MainActivity extends Activity {
         @Override
         public void run() {
             if (!pageLoaded && webView != null) {
-                // Page didn't load in time, retry
                 webView.stopLoading();
                 handler.postDelayed(retryRunnable, RETRY_DELAY);
             }
@@ -53,14 +49,12 @@ public class MainActivity extends Activity {
 
         handler = new Handler();
 
-        // Request fullscreen before setContentView
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         );
 
-        // Keep screen on and dismiss keyguard
         getWindow().addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD |
@@ -72,18 +66,30 @@ public class MainActivity extends Activity {
 
         webView = (WebView) findViewById(R.id.webview);
         setupWebView();
-
-        // Hide system UI
         hideSystemUI();
 
-        // Load the slideshow
-        loadPage();
+        // Small delay to ensure WebView is ready
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                loadPage();
+            }
+        }, 500);
     }
 
     private void loadPage() {
         pageLoaded = false;
-        webView.loadUrl(SLIDESHOW_URL);
-        // Set timeout for initial load
+        handler.removeCallbacks(timeoutRunnable);
+        handler.removeCallbacks(retryRunnable);
+
+        // Load HTML that immediately redirects - this ensures WebView processes it internally
+        String html = "<!DOCTYPE html><html><head>" +
+            "<meta http-equiv=\"refresh\" content=\"0;url=" + SLIDESHOW_URL + "\">" +
+            "<script>window.location.href='" + SLIDESHOW_URL + "';</script>" +
+            "</head><body style=\"background:#000;\"></body></html>";
+
+        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+
         handler.postDelayed(timeoutRunnable, LOAD_TIMEOUT);
     }
 
@@ -101,11 +107,17 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setSupportZoom(false);
 
-        // Handle all URLs within WebView - never open external browser
+        // Allow mixed content (HTTP on HTTPS) for Android 5+
+        try {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        } catch (NoSuchMethodError e) {
+            // Android 4.4 doesn't have this method, ignore
+        }
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                // Always load in this WebView, never open external apps
+                // Always handle URLs internally - never open external browser
                 view.loadUrl(url);
                 return true;
             }
@@ -113,22 +125,27 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                pageLoaded = false;
+                // Only mark as not loaded if it's not our target URL yet
+                if (!url.contains("93.127.216.80")) {
+                    pageLoaded = false;
+                }
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                pageLoaded = true;
-                handler.removeCallbacks(timeoutRunnable);
-                handler.removeCallbacks(retryRunnable);
+                // Only mark as loaded when we reach the actual slideshow
+                if (url.contains("93.127.216.80")) {
+                    pageLoaded = true;
+                    handler.removeCallbacks(timeoutRunnable);
+                    handler.removeCallbacks(retryRunnable);
+                }
                 hideSystemUI();
             }
 
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 super.onReceivedError(view, errorCode, description, failingUrl);
-                // Error loading page, retry after delay
                 pageLoaded = false;
                 handler.removeCallbacks(timeoutRunnable);
                 handler.postDelayed(retryRunnable, RETRY_DELAY);
@@ -136,14 +153,11 @@ public class MainActivity extends Activity {
 
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                // Accept SSL errors (for self-signed certs if needed)
                 handler.proceed();
             }
         });
 
         webView.setWebChromeClient(new WebChromeClient());
-
-        // Make background black
         webView.setBackgroundColor(0xFF000000);
     }
 
@@ -173,7 +187,6 @@ public class MainActivity extends Activity {
         hideSystemUI();
         if (webView != null) {
             webView.onResume();
-            // If page wasn't loaded, try again
             if (!pageLoaded) {
                 loadPage();
             }
@@ -200,6 +213,6 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        // Disable back button to prevent accidental exits
+        // Disable back button
     }
 }
