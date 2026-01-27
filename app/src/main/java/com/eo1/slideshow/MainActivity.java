@@ -82,8 +82,19 @@ public class MainActivity extends Activity {
         handler.removeCallbacks(timeoutRunnable);
         handler.removeCallbacks(retryRunnable);
 
-        // Direct load - simpler approach for Android 4.4
-        webView.loadUrl(SLIDESHOW_URL);
+        // Load a local page that redirects via JavaScript after load
+        String html = "<html><head></head><body style='background:#000;'></body></html>";
+        webView.loadDataWithBaseURL("http://localhost/", html, "text/html", "UTF-8", null);
+
+        // After the blank page loads, navigate to the real URL
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (webView != null) {
+                    webView.loadUrl(SLIDESHOW_URL);
+                }
+            }
+        }, 100);
 
         handler.postDelayed(timeoutRunnable, LOAD_TIMEOUT);
     }
@@ -112,7 +123,11 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                // Return false to let WebView handle the URL internally
+                // Handle all HTTP/HTTPS URLs internally, never open external browser
+                if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) {
+                    view.loadUrl(url);
+                    return true;
+                }
                 return false;
             }
 
