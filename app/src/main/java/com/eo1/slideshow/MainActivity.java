@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private Handler handler;
-    private static final String URL = "http://93.127.216.80:3000/d/hallway";
+    private static final String URL = "http://93.127.216.80:3000/d/bedroom";
     private static final int RETRY_DELAY = 5000; // 5 seconds
     private static final int WIFI_CHECK_DELAY = 2000; // 2 seconds
     private boolean pageLoaded = false;
