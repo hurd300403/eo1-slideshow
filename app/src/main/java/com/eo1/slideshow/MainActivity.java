@@ -30,10 +30,19 @@ public class MainActivity extends Activity {
 
         webView = (WebView) findViewById(R.id.webview);
 
-        // Basic settings
+        // Settings for full resolution
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        settings.setLoadWithOverviewMode(false);
+        settings.setUseWideViewPort(true);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setSupportZoom(false);
+        settings.setDefaultZoom(WebSettings.ZoomDensity.FAR);
+
+        // Render at device resolution
+        webView.setInitialScale(0);
 
         // This is the key - set WebViewClient BEFORE loading URL
         webView.setWebViewClient(new WebViewClient());

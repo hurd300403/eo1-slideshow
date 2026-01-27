@@ -12,6 +12,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="EO1 Slideshow"
         android:hardwareAccelerated="true"
+        android:largeHeap="true"
         android:theme="@style/FullscreenTheme">
 
         <activity
