@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -16,6 +17,28 @@ import android.webkit.WebViewClient;
 public class MainActivity extends Activity {
 
     private WebView webView;
+
+    // JavaScript interface for hardware brightness control
+    public class EO1Interface {
+        private Activity activity;
+
+        public EO1Interface(Activity activity) {
+            this.activity = activity;
+        }
+
+        @JavascriptInterface
+        public void setBrightness(int percent) {
+            final float brightness = Math.max(0.01f, percent / 100f);
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    WindowManager.LayoutParams layout = activity.getWindow().getAttributes();
+                    layout.screenBrightness = brightness;
+                    activity.getWindow().setAttributes(layout);
+                }
+            });
+        }
+    }
     private Handler handler;
     private static final String URL = "http://93.127.216.80:3000/d/living-room";
     private static final int RETRY_DELAY = 5000; // 5 seconds
@@ -54,6 +77,9 @@ public class MainActivity extends Activity {
 
         webView.setInitialScale(0);
         webView.setBackgroundColor(0xFF000000);
+
+        // Register JavaScript interface for hardware brightness control
+        webView.addJavascriptInterface(new EO1Interface(this), "EO1");
 
         // WebViewClient with error handling and auto-retry
         webView.setWebViewClient(new WebViewClient() {
