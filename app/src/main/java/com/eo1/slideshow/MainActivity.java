@@ -82,13 +82,8 @@ public class MainActivity extends Activity {
         handler.removeCallbacks(timeoutRunnable);
         handler.removeCallbacks(retryRunnable);
 
-        // Load HTML that immediately redirects - this ensures WebView processes it internally
-        String html = "<!DOCTYPE html><html><head>" +
-            "<meta http-equiv=\"refresh\" content=\"0;url=" + SLIDESHOW_URL + "\">" +
-            "<script>window.location.href='" + SLIDESHOW_URL + "';</script>" +
-            "</head><body style=\"background:#000;\"></body></html>";
-
-        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+        // Direct load - simpler approach for Android 4.4
+        webView.loadUrl(SLIDESHOW_URL);
 
         handler.postDelayed(timeoutRunnable, LOAD_TIMEOUT);
     }
@@ -117,9 +112,8 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                // Always handle URLs internally - never open external browser
-                view.loadUrl(url);
-                return true;
+                // Return false to let WebView handle the URL internally
+                return false;
             }
 
             @Override
