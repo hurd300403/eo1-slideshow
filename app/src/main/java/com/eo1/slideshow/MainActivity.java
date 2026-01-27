@@ -1,7 +1,11 @@
 package com.eo1.slideshow;
 
 import android.app.Activity;
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -12,11 +16,17 @@ import android.webkit.WebViewClient;
 public class MainActivity extends Activity {
 
     private WebView webView;
+    private Handler handler;
     private static final String URL = "http://93.127.216.80:3000/d/living-room";
+    private static final int RETRY_DELAY = 5000; // 5 seconds
+    private static final int WIFI_CHECK_DELAY = 2000; // 2 seconds
+    private boolean pageLoaded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        handler = new Handler();
 
         // Fullscreen
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -40,17 +50,72 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setSupportZoom(false);
         settings.setDefaultZoom(WebSettings.ZoomDensity.FAR);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
-        // Render at device resolution
         webView.setInitialScale(0);
+        webView.setBackgroundColor(0xFF000000);
 
-        // This is the key - set WebViewClient BEFORE loading URL
-        webView.setWebViewClient(new WebViewClient());
+        // WebViewClient with error handling and auto-retry
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (url.contains("93.127.216.80")) {
+                    pageLoaded = true;
+                }
+                hideSystemUI();
+            }
 
-        // Load the URL
-        webView.loadUrl(URL);
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                super.onReceivedError(view, errorCode, description, failingUrl);
+                pageLoaded = false;
+                // Auto-retry on error
+                scheduleRetry();
+            }
+        });
 
         hideSystemUI();
+
+        // Wait for network then load
+        waitForNetworkAndLoad();
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        return activeNetwork != null && activeNetwork.isConnected();
+    }
+
+    private void waitForNetworkAndLoad() {
+        if (isNetworkAvailable()) {
+            // Network available, load the page
+            loadPage();
+        } else {
+            // No network yet, check again in 2 seconds
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    waitForNetworkAndLoad();
+                }
+            }, WIFI_CHECK_DELAY);
+        }
+    }
+
+    private void loadPage() {
+        pageLoaded = false;
+        webView.loadUrl(URL);
+    }
+
+    private void scheduleRetry() {
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!pageLoaded) {
+                    waitForNetworkAndLoad();
+                }
+            }
+        }, RETRY_DELAY);
     }
 
     private void hideSystemUI() {
@@ -77,6 +142,10 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         hideSystemUI();
+        // If page failed to load, retry
+        if (!pageLoaded) {
+            waitForNetworkAndLoad();
+        }
     }
 
     @Override
