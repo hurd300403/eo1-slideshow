@@ -10,8 +10,8 @@ android {
         applicationId "com.eo1.slideshow"
         minSdk 19  // Android 4.4 KitKat
         targetSdk 28  // Keep lower for better compatibility
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "2.0"
     }
 
     buildTypes {

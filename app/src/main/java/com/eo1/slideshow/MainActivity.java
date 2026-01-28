@@ -17,13 +17,19 @@ import android.webkit.WebViewClient;
 public class MainActivity extends Activity {
 
     private WebView webView;
+    private DeviceConfig deviceConfig;
+    private UpdateManager updateManager;
 
-    // JavaScript interface for hardware brightness control
+    // JavaScript interface for hardware control and app management
     public class EO1Interface {
         private Activity activity;
+        private UpdateManager updateManager;
+        private DeviceConfig deviceConfig;
 
-        public EO1Interface(Activity activity) {
+        public EO1Interface(Activity activity, UpdateManager updateManager, DeviceConfig deviceConfig) {
             this.activity = activity;
+            this.updateManager = updateManager;
+            this.deviceConfig = deviceConfig;
         }
 
         @JavascriptInterface
@@ -38,11 +44,61 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void checkForUpdate() {
+            if (updateManager != null) {
+                updateManager.checkForUpdate();
+            }
+        }
+
+        @JavascriptInterface
+        public int getVersionCode() {
+            return BuildConfig.VERSION_CODE;
+        }
+
+        @JavascriptInterface
+        public String getVersionName() {
+            return BuildConfig.VERSION_NAME;
+        }
+
+        @JavascriptInterface
+        public String getDeviceId() {
+            return deviceConfig != null ? deviceConfig.getDeviceId() : null;
+        }
+
+        @JavascriptInterface
+        public void setDeviceId(final String deviceId) {
+            if (deviceConfig != null && deviceId != null && !deviceId.isEmpty()) {
+                deviceConfig.setDeviceId(deviceId);
+                // Reload with new device ID
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ((MainActivity) activity).reloadWithDeviceId();
+                    }
+                });
+            }
+        }
+
+        @JavascriptInterface
+        public void resetDevice() {
+            if (deviceConfig != null) {
+                deviceConfig.clear();
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ((MainActivity) activity).reloadWithDeviceId();
+                    }
+                });
+            }
+        }
     }
+
     private Handler handler;
-    private static final String URL = "http://93.127.216.80:3000/d/living-room";
-    private static final int RETRY_DELAY = 5000; // 5 seconds
-    private static final int WIFI_CHECK_DELAY = 2000; // 2 seconds
+    private static final String SERVER_BASE = "http://93.127.216.80:3000";
+    private static final int RETRY_DELAY = 5000;
+    private static final int WIFI_CHECK_DELAY = 2000;
     private boolean pageLoaded = false;
 
     @Override
@@ -50,6 +106,10 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         handler = new Handler();
+
+        // Initialize device config and update manager
+        deviceConfig = new DeviceConfig(this);
+        updateManager = new UpdateManager(this);
 
         // Fullscreen
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -78,8 +138,11 @@ public class MainActivity extends Activity {
         webView.setInitialScale(0);
         webView.setBackgroundColor(0xFF000000);
 
-        // Register JavaScript interface for hardware brightness control
-        webView.addJavascriptInterface(new EO1Interface(this), "EO1");
+        // Register JavaScript interface
+        webView.addJavascriptInterface(
+            new EO1Interface(this, updateManager, deviceConfig),
+            "EO1"
+        );
 
         // WebViewClient with error handling and auto-retry
         webView.setWebViewClient(new WebViewClient() {
@@ -96,7 +159,6 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 super.onReceivedError(view, errorCode, description, failingUrl);
                 pageLoaded = false;
-                // Auto-retry on error
                 scheduleRetry();
             }
         });
@@ -105,6 +167,30 @@ public class MainActivity extends Activity {
 
         // Wait for network then load
         waitForNetworkAndLoad();
+
+        // Start periodic update checks
+        updateManager.startPeriodicChecks();
+    }
+
+    /**
+     * Get the URL to load based on device configuration
+     */
+    private String getTargetUrl() {
+        String deviceId = deviceConfig.getDeviceId();
+        if (deviceId != null && !deviceId.isEmpty()) {
+            return SERVER_BASE + "/d/" + deviceId;
+        } else {
+            // No device configured, show setup page
+            return SERVER_BASE + "/d/setup";
+        }
+    }
+
+    /**
+     * Reload the WebView with the current device ID
+     */
+    void reloadWithDeviceId() {
+        pageLoaded = false;
+        webView.loadUrl(getTargetUrl());
     }
 
     private boolean isNetworkAvailable() {
@@ -115,10 +201,8 @@ public class MainActivity extends Activity {
 
     private void waitForNetworkAndLoad() {
         if (isNetworkAvailable()) {
-            // Network available, load the page
             loadPage();
         } else {
-            // No network yet, check again in 2 seconds
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -130,7 +214,7 @@ public class MainActivity extends Activity {
 
     private void loadPage() {
         pageLoaded = false;
-        webView.loadUrl(URL);
+        webView.loadUrl(getTargetUrl());
     }
 
     private void scheduleRetry() {
@@ -168,9 +252,16 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         hideSystemUI();
-        // If page failed to load, retry
         if (!pageLoaded) {
             waitForNetworkAndLoad();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (updateManager != null) {
+            updateManager.cleanup();
         }
     }
 
